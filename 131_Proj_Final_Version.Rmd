@@ -1,0 +1,714 @@
+---
+title: "PSTAT 131 Final Project - Predicting Flight Delays"
+author: "Branson Enani"
+output:
+    html_document:
+      toc: true
+      toc_float: true
+      code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE,
+                      warning = FALSE)
+```
+
+## Introduction
+
+![](/Users/kerouac/plane_pic_proj.jpg)
+
+This project is centered around predicting flight delays from a number of variables, with each entry in the data set being a specific flight from the year of 2008. The arrival delay of a particular flight is the outcome that we are interested in with various other factors prior to arrival being of interest. This data has flights from numerous carriers in a variety of geographical locations.
+
+## Loading Packages
+
+These are the packages that we load for various model-building, plotting, and organizational tasks.
+
+```{r, results = 'hide'}
+
+library(ISLR)
+library(corrplot)  
+library(discrim)  
+library(corrr) 
+library(kknn)
+library(knitr)   
+library(MASS)   
+library(tidyverse)   
+library(tidymodels)
+library(ggplot2)   
+library(ggrepel)
+library(ggimage)
+library(rpart.plot)
+library(vip)         
+library(vembedr)     
+library(janitor)     
+library(randomForest)  
+library(stringr)   
+library("dplyr")     
+library("yardstick")
+tidymodels_prefer()
+```
+
+## Loading in our Data
+
+```{r, eval = FALSE}
+flight_data <- read.csv('/Users/kerouac/Downloads/DelayedFlights.csv')
+save(flight_data, file = '~/project_save_files/flight_data.rda')
+```
+
+We read in the csv file and then saved the file in order load it in after and save computing time.
+
+```{r}
+load(file ='~/project_save_files/flight_data.rda' )
+```
+
+In order to get a clear picture of the data, let's go over the different variables and a summary of what is represented in the set. The variables and a short description are described below
+
+Year 2008 for all flights
+
+Month: 1-12 is January through February
+
+DayOfMonth: 1-31 possible days of the month
+
+DayOfWeek: 1 (Monday) through 7 (Sunday)
+
+DepTime: Actual departure time in local time
+
+CRSDepTime: Scheduled departure time
+
+ArrTime Actual arrival time in local time
+
+CRSArrTime Ccheduled arrival time in local time
+
+UniqueCarrier: Unique Carrier Code (airline)
+
+FlightNum: Specific Flight Number
+
+TailNum: Airplane Tail Number which is unique for each aircraft
+
+ActualElapsedTime: Actual Elapsed Time in minutes
+
+CRSElapsedTime: Scheduled Elapsed Time in minutes AirTime: Time in the air in minutes
+
+ArrDelay: Arrival delay, in minutes
+
+DepDelay: Departure delay, in minutes
+
+Origin: origin IATA airport code
+
+Dest: destination IATA airport code
+
+Distance: Distance of trip in miles
+
+TaxiIn: taxi in time, in minutes
+
+TaxiOut: taxi out time in minutes
+
+Cancelled: was the flight cancelled?
+
+CancellationCode reason for cancellation (A = carrier, B = weather, C = NAS, D = security)
+
+Diverted 1 = yes, 0 = no
+
+CarrierDelay in minutes: Carrier delay is any delay that is the fault of the Carrier. Examples of this would be aircraft damage, cleaning of the aircraft, inspection etc.
+
+WeatherDelay: Weather delay is delay caused by hazardous weather
+
+NASDelay in minutes: Delay that is caused by the the National Airspace System (NAS), generally operations at a particular airport such as heavy traffic
+
+SecurityDelay in minutes: Security delay is security measures/events causing delay
+
+LateAircraftDelay in minutes: Arrival delay at an airport that is due late arrival of the same aircraft at a previous airport.
+
+## Organizing the Data
+
+```{r}
+dim(flight_data)
+```
+
+Here we can see what we are working with in the data. We have 1,936,758 observations and 30 variables.
+
+```{r}
+set.seed(1234)
+
+carriers <- flight_data$UniqueCarrier
+
+endeavor_air <- flight_data %>% 
+  filter(UniqueCarrier == '9E')
+american_airlines <- flight_data %>% 
+  filter(UniqueCarrier == 'AA')
+aloha_airlines <- flight_data %>% 
+  filter(UniqueCarrier == 'AQ')
+alaska_airlines <- flight_data %>% 
+  filter(UniqueCarrier == 'AS')
+jetblue_airlines <- flight_data %>% 
+  filter(UniqueCarrier == 'B6')
+continental_air <- flight_data %>% 
+  filter(UniqueCarrier == 'CO')
+delta_airlines<- flight_data %>% 
+  filter(UniqueCarrier == 'DL')
+expressjet_air <- flight_data %>% 
+  filter(UniqueCarrier == 'EV')
+frontier_airlines <- flight_data %>% 
+  filter(UniqueCarrier == 'F9')
+airtran_airlines <- flight_data %>% 
+  filter(UniqueCarrier == 'FL')
+hawaiian_airlines <- flight_data %>% 
+  filter(UniqueCarrier == 'HA')
+envoy_airlines <-  flight_data %>% 
+  filter(UniqueCarrier == 'MQ')
+northwest_airlines <- flight_data %>% 
+  filter(UniqueCarrier == 'NW')
+psa_airlines <- flight_data %>% 
+  filter(UniqueCarrier == 'OH')
+skywest_airlines <- flight_data %>% 
+  filter(UniqueCarrier == 'OO')
+united_airlines <- flight_data %>% 
+  filter(UniqueCarrier == 'UA')
+us_airways<- flight_data %>% 
+  filter(UniqueCarrier == 'US')
+southwest_airlines<- flight_data %>% 
+  filter(UniqueCarrier == 'WN')
+jsx_airlines<- flight_data %>% 
+  filter(UniqueCarrier == 'XE')
+mesa_airlines<- flight_data %>% 
+  filter(UniqueCarrier == 'YV')
+
+all_airlines <- rbind(sample_n(airtran_airlines, 500),sample_n(alaska_airlines,500),sample_n(aloha_airlines,500),sample_n(american_airlines,500),sample_n(continental_air,500),sample_n(delta_airlines,500),sample_n(endeavor_air,500),sample_n(envoy_airlines,500),sample_n(expressjet_air,500),sample_n(frontier_airlines,500),sample_n(hawaiian_airlines,500),sample_n(jetblue_airlines,500),sample_n(jsx_airlines,500),sample_n(mesa_airlines,500),sample_n(northwest_airlines,500),sample_n(psa_airlines,500),sample_n(skywest_airlines,500),sample_n(southwest_airlines,500),sample_n(united_airlines,500),sample_n(us_airways,500))
+
+all_airlines$UniqueCarrier[all_airlines$UniqueCarrier == 'UA'] <- 'United'
+all_airlines$UniqueCarrier[all_airlines$UniqueCarrier == 'US'] <- 'US Airways'
+all_airlines$UniqueCarrier[all_airlines$UniqueCarrier == 'WN'] <- 'Southwest'
+all_airlines$UniqueCarrier[all_airlines$UniqueCarrier == 'XE'] <- 'JSX'
+all_airlines$UniqueCarrier[all_airlines$UniqueCarrier == 'AS'] <- 'Alaska'
+all_airlines$UniqueCarrier[all_airlines$UniqueCarrier == 'OO'] <- 'Skywest'
+all_airlines$UniqueCarrier[all_airlines$UniqueCarrier == 'FL'] <- 'Airtran'
+all_airlines$UniqueCarrier[all_airlines$UniqueCarrier == 'DL'] <- 'Delta'
+all_airlines$UniqueCarrier[all_airlines$UniqueCarrier == 'CO'] <- 'Continental'
+all_airlines$UniqueCarrier[all_airlines$UniqueCarrier == 'B6'] <- 'JetBlue'
+all_airlines$UniqueCarrier[all_airlines$UniqueCarrier == 'HA'] <- 'Hawaiian'
+all_airlines$UniqueCarrier[all_airlines$UniqueCarrier == 'AA'] <- 'American'
+all_airlines$UniqueCarrier[all_airlines$UniqueCarrier == '9E'] <- 'Endeavor'
+all_airlines$UniqueCarrier[all_airlines$UniqueCarrier == 'EV'] <- 'ExpressJet'
+all_airlines$UniqueCarrier[all_airlines$UniqueCarrier == 'F9'] <- 'Frontier'
+all_airlines$UniqueCarrier[all_airlines$UniqueCarrier == 'OH'] <- 'PSA'
+all_airlines$UniqueCarrier[all_airlines$UniqueCarrier == 'YV'] <- 'Mesa'
+all_airlines$UniqueCarrier[all_airlines$UniqueCarrier == 'NW'] <- 'Northwest'
+all_airlines$UniqueCarrier[all_airlines$UniqueCarrier == 'AQ'] <- 'Aloha'
+all_airlines$UniqueCarrier[all_airlines$UniqueCarrier == 'MQ'] <- 'Envoy'
+all_airlines$UniqueCarrier[all_airlines$UniqueCarrier == 'B6'] <- 'JetBlue'
+```
+
+-   Our data set is quite large, and in order to make it slightly easier to work with we firstly extracted data based on the individual airline. Following this, we took a sample 500 flights from each airline so that our data is evenly distributed across airlines. We then renamed the carrier codes to their respective airline names in order to make it easier to understand.
+
+## Exploratory Data Analysis
+
+```{r}
+unique(all_airlines$UniqueCarrier)
+
+```
+
+These are the various carriers that are operating the flights. There are 20 unique carriers
+
+```{r}
+unique(all_airlines$Origin)
+length(unique(all_airlines$Origin))
+```
+
+These are the various Origins by their IATA code. We have 258 unique origins
+
+```{r}
+unique(all_airlines$Dest)
+length(unique(all_airlines$Dest))
+```
+
+These are the various destinations by their IATA code. There are 264 unique destinations
+
+```{r}
+
+
+
+all_airlines_full_values <- drop_na(all_airlines)
+all_airlines_full_values$Month <- as.factor(all_airlines_full_values$Month)
+all_airlines_full_values$DayOfWeek <- as.factor(all_airlines_full_values$DayOfWeek)
+
+
+
+```
+
+Here we are dropping the NA values from our dataframe because these values do not help with our models. Additionally, it makes sense to change the Month and Day of Week into ordered factors there are a set number of levels for each of these (12 months in a year, 7 days in a week)
+
+```{r, fig.height=10}
+ggplot(all_airlines_full_values)+ geom_boxplot(aes(y = ArrDelay, x = ordered(Month, levels = c(1:12))), colour = 'Blue', fill = 'Orange')+labs(title = "Delays By Month",
+              subtitle = 'Boxplot',
+              x = "Month", y = "Delay")
+
+```
+
+Here is a box plot that shows how delays are distributed throughout the year depending on the month. We can get a general idea about the mean and variances of each month from this plot.
+
+```{r}
+by_month_dat <- all_airlines_full_values %>% 
+  group_by(month = Month) %>% 
+  summarize(ArrDelay = mean(ArrDelay))
+
+ggplot(by_month_dat)+
+  geom_col(aes(x =month, y = ArrDelay), fill ='blue')
+
+```
+
+This plot shows the mean Arrival Delay based upon the month of the year which shows that there isn't a great amount of variation from month to month.
+
+```{r}
+
+by_month_weather <- all_airlines_full_values %>% 
+  group_by(month = Month) %>% 
+  summarize(WeatherDelay = mean(WeatherDelay))
+
+ggplot(by_month_weather)+
+  geom_col(aes(x =month, y = WeatherDelay), fill = 'forestgreen')
+```
+
+This plot shows the average Weather Delay based upon the month of the year, with some months seeing more of a weather delay than others.
+
+```{r}
+various_origins <- all_airlines_full_values %>% 
+  group_by(Origin)
+
+origin_delay_flights <- various_origins %>% 
+  summarise(avg_delay = mean(ArrDelay),
+            num_of_flights = length(unique(FlightNum)))
+```
+
+We can examine the amount of flights for each Origin and the mean delay for that origin.
+
+```{r, fig.width=10}
+origins_of_interest <- origin_delay_flights %>% 
+  filter(num_of_flights>50) %>% 
+  arrange(-avg_delay)
+
+ggplot(origins_of_interest)+
+  geom_col(aes(x = Origin, y = avg_delay), fill = 'red4')+
+  labs(y = 'Average Delay', title = 'Average Delay of Popular Airports')
+
+
+```
+
+We are checking here to see the Origins with the greatest delays where there are greater than 50 entries from that particular origin. The reason for this is because these are among the most popular airports in our dataset and give insight into the distribution of delays. Baltimore-Washington, JFK, and Detroit Metropolitan are among top 3 airports with the greatest average delay.
+
+```{r}
+
+
+group_by_uniquecarrier <- all_airlines_full_values %>% 
+  group_by(UniqueCarrier)
+
+carrier_graphing_data <- group_by_uniquecarrier %>% 
+  summarise(avg_delay = mean(ArrDelay))
+
+ggplot((carrier_graphing_data[1:10,])) +
+  geom_col(aes(x = UniqueCarrier, y = avg_delay), fill = 'maroon3')+
+  labs(x = 'Unique Carrier', y = "Average Carrier Delay Minutes")
+
+ggplot((carrier_graphing_data[10:20,])) +
+  geom_col(aes(x = UniqueCarrier, y = avg_delay), fill = 'maroon3')+
+  labs(x = 'Unique Carrier', y = "Average Carrier Delay Minutes")
+```
+
+The reason that the graphs are split up is because it would be too difficult to read the names of each airline on the x-axis if they were all on one. JetBlue and Endeavor are the two airlines with the greatest average delay, both being over 40 minutes
+
+```{r}
+set.seed(1234)
+
+flight_split <- initial_split(all_airlines_full_values, prop = 0.80,
+                                strata = ArrDelay)
+flight_train <- training(flight_split)
+flight_test <- testing(flight_split)
+
+
+```
+
+We are splitting the data here in order to have both a training set to train our models and testing set to verify that our models are working well outside of the training data. A proportion of 0.8 was used for the split because we have a large number of observations and the testing set will be sufficiently large. We are stratifying on our outcome variable that we are interested in which is Arrival Delay.
+
+```{r}
+flight_folds <- vfold_cv(flight_train, v = 10)
+```
+
+Flight folds will be used for our cross-validation which is useful because rather than having just a training and testing set we will have multiple folds that can each be used as validation sets while the other folds are used as the training sets. Each of the folds validate each other which is useful for fitting our models.
+
+## Model Building and Understanding Results
+
+```{r}
+ 
+  flight_recipe <- recipe(ArrDelay~UniqueCarrier+Month+CRSDepTime+CRSArrTime+CRSElapsedTime+Distance+TaxiIn+TaxiOut+DepDelay,  data = flight_train)%>% 
+    step_center() %>% 
+    step_scale() %>% 
+    step_corr(threshold = 0.8) %>% 
+    step_dummy(all_nominal_predictors()) 
+
+```
+
+Our aim with this recipe is to be able to predict the Arrival Delay of a flight from various factors that come before the arrival. These various factors include: Unique Carrier, Month, Scheduled Departure Time, Scheduled Arrival Time, Scheduled Elapsed Time, Distance of flight, Taxi In and Taxi Out time, and overall Departure Delay.
+
+### Linear Regression Model
+
+With this following linear regression model we add in our recipe, with Arrival Delay being the numeric outcome. We create our workflow and then fit the model to the training data. Let's see what our results are.
+
+```{r}
+
+
+lm_model <- linear_reg() %>%
+  set_mode('regression') %>% 
+  set_engine("lm")
+
+lm_wflow <- workflow() %>%
+  add_model(lm_model) %>%
+  add_recipe(flight_recipe)
+
+
+
+linear_fit <- fit(lm_wflow, data = flight_train)
+
+linear_fit %>%
+  
+  extract_fit_parsnip() %>%
+  
+  tidy()
+
+predictions_linear <- predict(linear_fit, new_data = flight_train)
+
+flight_metrics <- metric_set(rmse, rsq, mae)
+flight_metrics(predictions_linear, truth = flight_train$ArrDelay, estimate = .pred)
+
+
+```
+
+After using our model to predict the testing data and then evaluating our metrics we can see that our RMSE (root mean squared error) is 11.87 and our rsq (r-squared) value is 0.96. Our mae (mean absolute error) is 7.95. Generally this would indicate that our errors are not ideal but this model explains the variation in the data well as shown from our rsq value.
+
+### Ridge Regression
+
+```{r}
+
+ridge_recipe <- 
+  flight_recipe %>% 
+  step_novel(all_nominal_predictors()) %>% 
+  step_dummy(all_nominal_predictors()) %>% 
+  step_zv(all_predictors()) %>% 
+  step_normalize(all_predictors())
+
+
+
+ridge_spec <- linear_reg(mixture = 0, penalty = tune()) %>%
+  set_mode("regression") %>%
+  set_engine("glmnet")
+
+
+ridge_wflow <- workflow() %>% 
+  add_model(ridge_spec) %>% 
+  add_recipe(ridge_recipe)
+
+
+
+penalty_grid <- grid_regular(penalty(range = c(-5, 5)), levels = 50)
+
+
+
+ridge_tune_res <- tune_grid(
+  ridge_wflow,
+  resamples = flight_folds, 
+  grid = penalty_grid
+)
+
+
+
+best_penalty <- select_best(ridge_tune_res, metric = "rmse")
+best_penalty
+
+
+ridge_final <- finalize_workflow(ridge_wflow, best_penalty)
+ridge_final_fit <- fit(ridge_final, data = flight_train)
+
+
+augment(ridge_final_fit, new_data = flight_test) %>%
+  metrics(truth = ArrDelay, estimate = .pred)
+
+
+autoplot(ridge_tune_res)
+```
+
+Our ridge regression was tuned by having the penalty range between -5 and 5, and the model by using different penalties and using resampling from our flight folds. After fitting this Ridge Regression we looked at the best RMSE value which was 12.87. This was from Preprocessor1_Model01. The penalty was 1e-05. The rsq was 0.967 and mae was 8.94
+
+### K Nearest Neighbors
+
+```{r, eval = FALSE}
+knn_spec <- 
+  nearest_neighbor(
+    neighbors = tune(),
+    mode = "regression") %>% 
+  set_engine("kknn")
+
+
+knn_wkflow <- workflow() %>% 
+  add_model(knn_spec) %>% 
+  add_recipe(flight_recipe)
+
+
+knn_parameters<- parameters(knn_spec)
+
+
+
+knn_grid <- grid_regular(knn_parameters, levels = 2)
+
+
+tuned_neighbors <- knn_wkflow %>% 
+  tune_grid(
+    resamples = flight_folds, 
+            grid = knn_grid)
+
+
+
+save(tuned_neighbors, file = '~/project_save_files/tuned_neighbors_model.rda')
+
+```
+
+```{r}
+load(file = '~/project_save_files/tuned_neighbors_model.rda')
+
+autoplot(tuned_neighbors)
+
+show_best(tuned_neighbors, metric = 'rmse')
+```
+
+We can see that our RMSE for the K Nearest Neighbors tuned model is higher than our other models.
+
+### Random Forest and Boosted Trees
+
+For the following models, we will save the results and then load them from their respective files to save time when computing. The analysis will be done after loading the files in. 
+
+
+
+
+The random forest model has several important arguments:$\textbf{mtry}$ is essentially a measurement of how many predictors will be randomly sampled each time there is a split for the tree models, ours had a range of 1-4.$\textbf{trees}$ is simply the number of trees that will be contained in the tuned model, our range was from 90-160. $\textbf{min_n}$ is the minimum amount of data points contained in a node/leaf in order for it to be split again with our range being from 10-150. We will be able to select which values work best for these parameters using tuning.
+
+
+```{r, eval = FALSE}
+r_forest_model <- rand_forest() %>%
+  set_engine("ranger") %>%
+  set_mode("regression")
+
+r_forest_wflow <- workflow() %>%
+  add_model(r_forest_model %>% set_args(mtry = tune(),
+                            trees = tune(),
+                            min_n = tune())) %>%
+  add_recipe(flight_recipe)
+
+forest_grid <- grid_regular(mtry(range = c(2, 12)), 
+                                            trees(range = c(90, 160)),
+                                            min_n(range = c(10, 150)), levels = 8)
+
+
+rf_tune_res <- tune_grid(r_forest_wflow, resamples = flight_folds, grid = forest_grid, metrics = metric_set(rsq, rmse))
+
+
+save(rf_tune_res, file = '~/project_save_files/flight_randf.rda')
+save(r_forest_wflow, file = '~/project_save_files/r_forest_wflow.rda')
+
+
+
+
+
+```
+
+
+
+
+For our boosted tree our $\textbf{mtry}$ ranged from 2-20, our $\textbf{trees}$ ranged from 100-190 and our $\textbf{min_n}$ ranged from 10-150. We also have a learn rate which ranges from -2 - 0.5 in our case.
+
+```{r, eval = FALSE}
+boost_spec <- boost_tree(trees = tune(),
+                         mtry = tune(),
+                         min_n = tune(),
+                         learn_rate = tune()) %>%
+  set_engine("xgboost") %>%
+  set_mode("regression")
+
+boost_wflow <- workflow() %>% 
+  add_recipe(flight_recipe) %>% 
+  add_model(boost_spec)
+
+
+boost_grid <- grid_regular(mtry(range = c(2, 20)), 
+                                            trees(range = c(100, 190)),
+                                            min_n(range = c(10, 150)), learn_rate(range = c(-2,0.5)))
+
+boost_tune_res <- tune_grid(boost_wflow, resamples = flight_folds, grid = boost_grid, metrics = metric_set(rsq, rmse))
+
+
+
+
+
+save(boost_tune_res, file ='~/project_save_files/boost_tune_res.rda')
+```
+
+
+
+```{r}
+load(file = '/Users/kerouac/project_save_files/boost_tune_res.rda')
+load(file = '/Users/kerouac/project_save_files/flight_randf.rda')
+load(file = '/Users/kerouac/project_save_files/r_forest_wflow.rda')
+```
+
+
+
+***Let's Analyze the random forest results***
+
+```{r}
+show_best(rf_tune_res, metric = 'rmse')
+
+show_best(rf_tune_res, metric = 'rsq')
+
+
+
+
+
+```
+
+Our tuned random forest yielded the best model (Preprocessor1_Model024) with an RMSE of 9.34 and an R squared value of 0.718. This was from an $\textbf{mtry}$ value of 12, $\textbf{trees}$ value of 110, and $\textbf{min_n}$ value of 10.
+
+```{r, fig.height=10, fig.width = 18}
+autoplot(rf_tune_res)
+
+```
+
+We can see the general trend that as the number of selected predictors increases, the RMSE decreases. Since this forest was created with a large number of trees for each model, the effect of the number of trees is less pronounced. With this being said, around 110 trees yielded the most optimal results
+
+***Now to look at the boosted tree model***
+
+```{r,fig.width=15, fig.height = 10}
+show_best(boost_tune_res, metric = 'rmse') 
+
+show_best(boost_tune_res, metric ='rsq')
+
+autoplot(boost_tune_res)
+```
+
+From our boosted tree model we can see that an $\textbf{mtry}$ value of 20, $\textbf{trees}$ value of 100, a learn rate of 0.177  and $\textbf{min_n}$ value of 10 gave us our best metrics.The best rsq value was 0.9358 and the best RMSE was 16.32
+
+## Best Model Performance on Testing Data
+
+From the various models that we created, the overall best metrics were seen with the linear regression model and the Random Forest Model in terms of RMSE. There might have been a degree of overfitting so we will look at both. Let's visualize the performance in comparison to the testing set further.
+
+
+### Linear Regression Testing
+```{r}
+
+
+delay_predict <- predict(linear_fit,  
+                              new_data = flight_test)
+
+delay_prediction_compare <- delay_predict %>%
+  bind_cols(Actual = flight_test$ArrDelay) 
+
+delay_prediction_compare
+```
+
+
+Here is a quick look at compared versus actual values. 
+
+
+
+```{r}
+ggplot(delay_prediction_compare,                                     
+       aes(x = .pred,
+           y = Actual)) +
+  geom_point() +
+  xlim(0,400)+
+  ylim(0,400)+
+  geom_abline(intercept = 0,
+              slope = 1,
+              color = "red3",
+              size = 1)+
+  labs(title = 'Linear Regression Model',x = 'Predicted')
+```
+
+
+Here is a graphical representation of how the predicted values compare to the actual values.
+
+
+```{r}
+linear_metrics <- metric_set(rmse, rsq, mae)
+linear_metrics(delay_predict, truth = flight_test$ArrDelay, estimate = .pred)
+
+```
+
+
+Our metrics for the linear model when fitting to the testing data were even slightly better than the training data which means that our model fits the entirety of the data quite well. RMSE here is 10.8, Rsq is 0.97, and Mae is 7.45
+
+
+
+
+
+
+### Random Forest Testing
+```{r}
+
+
+
+rf_final_wf <- r_forest_wflow %>%
+  finalize_workflow(select_best(rf_tune_res, metric = "rmse"))
+
+results_of_final_wf <- fit(rf_final_wf, flight_train)
+
+
+
+
+best_forest_predict <- predict(results_of_final_wf,  
+                              new_data = flight_test)
+
+delay_prediction_compare_rf <- best_forest_predict %>%
+  bind_cols(Actual = flight_test$ArrDelay)
+
+delay_prediction_compare_rf
+```
+This tibble shows the predictions versus actual values. 
+
+
+
+```{r}
+ggplot(delay_prediction_compare_rf,                                     
+       aes(x = .pred,
+           y = Actual)) +
+  geom_point() +
+  xlim(0,400)+
+  ylim(0,400)+
+  geom_abline(intercept = 0,
+              slope = 1,
+              color = "red3",
+              size = 1)+
+  labs(title = 'Random Forest Model',x = 'Predicted')
+```
+
+
+This is the same actual versus predicted graph but for the random forest
+
+
+
+```{r}
+
+rf_metrics <- metric_set(rmse, rsq, mae)
+rf_metrics(best_forest_predict, truth = flight_test$ArrDelay, estimate = .pred)
+
+```
+Our RMSE value here is 19.46 which is much higher than it was for the training data. RSQ is 0.91 and MAE is 9.57. 
+
+
+
+## Conclusion
+
+In conclusion, the models that we have created all had unique results. Initially, the data seemed to be somewhat difficult to fit to models given the large number of observations and variables. After shrinking down the model and cleaning the data the model fitting became much easier. This highlights the importance of becoming familiar with the data prior to implementing models.
+
+Ultimately, both the random forest model and the linear regression model had good metrics when creating them. We aimed to see how various factors prior to arrival can affect arrival delay, and these two models gave us the best results compared to the others. However, once we fit the models to the testing data, the regression model performed better indicating that there might have been some overfitting with the random forest.
+
+The idea behind this project was very fascinating and there are some possible improvements that can be implemented for similar types of projects. Firstly, other variables and data that can predict delays would potentially allow for even more interesting models. Having a dataset with more obscure data that could potentially predict delays better would be fascinating to explore. Secondly, perhaps unsupervised learning methods like neural networks would be effective for this type of data.
+
+Thats all, folks.
+
+![](images/plane_nighttime.jpg){width="624"}
