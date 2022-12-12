@@ -63,6 +63,8 @@ load(file ='~/project_save_files/flight_data.rda' )
 
 In order to get a clear picture of the data, let's go over the different variables and a summary of what is represented in the set. The variables and a short description are described below
 
+X: Unique Entry
+
 Year 2008 for all flights
 
 Month: 1-12 is January through February
@@ -88,6 +90,8 @@ TailNum: Airplane Tail Number which is unique for each aircraft
 ActualElapsedTime: Actual Elapsed Time in minutes
 
 CRSElapsedTime: Scheduled Elapsed Time in minutes AirTime: Time in the air in minutes
+
+AirTime: Time in air, in minutes
 
 ArrDelay: Arrival delay, in minutes
 
